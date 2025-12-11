@@ -4,49 +4,64 @@ require_once('vendor/autoload.php');
 use Facebook\WebDriver\Remote\RemoteWebDriver;
 use Facebook\WebDriver\Remote\DesiredCapabilities;
 use Facebook\WebDriver\Chrome\ChromeOptions;
+use Facebook\WebDriver\WebDriverBy;
 
-// --- CONFIGURAÇÃO ---
-// Caminho do Chrome que você baixou na pasta inicial
+// --- 1. PREPARAÇÃO DO BANCO DE DADOS (SQL) ---
+// Cria um arquivo de banco de dados local
+$db = new SQLite3('meu_banco.db');
+
+// Cria a tabela SE ela não existir (Comando SQL Puro)
+$db->exec("CREATE TABLE IF NOT EXISTS resultados (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    titulo TEXT,
+    data_coleta DATETIME DEFAULT CURRENT_TIMESTAMP
+)");
+
+echo "--- Banco de Dados Conectado ---\n";
+
+// --- 2. CONFIGURAÇÃO DO CHROME ---
 $chromePath = '/home/antonio_costan/chrome-linux64/chrome';
-
 $options = new ChromeOptions();
 $options->setBinary($chromePath);
-$options->addArguments([
-    '--headless', // Importante: Roda sem janela (obrigatório no WSL)
-    '--no-sandbox',
-    '--disable-dev-shm-usage',
-    '--window-size=1920,1080',
-]);
+$options->addArguments(['--headless', '--no-sandbox', '--disable-dev-shm-usage', '--window-size=1920,1080']);
 
 $capabilities = DesiredCapabilities::chrome();
 $capabilities->setCapability(ChromeOptions::CAPABILITY, $options);
 
-echo "--- Iniciando Automação ---\n";
-
 try {
-    // Conecta ao motorista (que vamos rodar no passo seguinte)
     $driver = RemoteWebDriver::create('http://localhost:9515', $capabilities);
 
-    // 1. Acessa o Google
-    echo "Acessando Google...\n";
-    $driver->get('https://www.google.com');
-    
-    // 2. Busca algo
-    echo "Pesquisando vaga...\n";
-    $elementoBusca = $driver->findElement(\Facebook\WebDriver\WebDriverBy::name('q'));
-    $elementoBusca->sendKeys('Vaga Estágio PHP Laravel');
-    $elementoBusca->submit();
+    // MUDANÇA: Vamos usar a Wikipedia do Laravel, que é mais fácil de ler que o Google
+    echo "1. Acessando Wikipedia...\n";
+    $driver->get('https://pt.wikipedia.org/wiki/Laravel');
 
-    // 3. Tira a prova (Print)
-    sleep(2); // Espera carregar
-    $driver->takeScreenshot('resultado_google.png');
-    echo "Sucesso! Print salvo como 'resultado_google.png'.\n";
+    // Pega o título principal (h1) e os subtítulos (h2)
+    echo "2. Lendo dados da página...\n";
+    $elementos = $driver->findElements(WebDriverBy::cssSelector('#content h1, #content h2'));
+
+    echo "3. Salvando no Banco de Dados...\n";
+    
+    $stmt = $db->prepare('INSERT INTO resultados (titulo) VALUES (:titulo)');
+
+    foreach ($elementos as $item) {
+        $texto = $item->getText();
+        
+        if (!empty($texto) && $texto != 'Conteúdo' && $texto != 'Menu de navegação') {
+            // Executa o INSERT no banco (SQL)
+            $stmt->bindValue(':titulo', $texto);
+            $stmt->execute();
+            echo " [SQL] Salvo: $texto\n";
+        }
+    }
+
+    echo "\n--- PROVA REAL: Lendo do Banco de Dados ---\n";
+    $consulta = $db->query('SELECT * FROM resultados ORDER BY id DESC LIMIT 5');
+    while ($linha = $consulta->fetchArray()) {
+        echo "ID: {$linha['id']} | Título: {$linha['titulo']}\n";
+    }
 
 } catch(\Exception $e) {
-    echo "ERRO: " . $e->getMessage() . "\n";
-    echo "Dica: Verifique se o comando 'chromedriver' está rodando no terminal.\n";
+    echo "ERRO: " . $e->getMessage();
 } finally {
-    if(isset($driver)) {
-        $driver->quit();
-    }
+    if(isset($driver)) $driver->quit();
 }
