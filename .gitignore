@@ -1,4 +1,6 @@
-vendor/
-*.pngchromedriver-linux64/
+/vendor
+*.db
 *.zip
-meu_banco.db
+*.png
+chromedriver-linux64/
+chrome-linux64/

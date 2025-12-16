@@ -7,10 +7,8 @@ use Facebook\WebDriver\Chrome\ChromeOptions;
 use Facebook\WebDriver\WebDriverBy;
 
 // --- 1. PREPARAÇÃO DO BANCO DE DADOS (SQL) ---
-// Cria um arquivo de banco de dados local
 $db = new SQLite3('meu_banco.db');
 
-// Cria a tabela SE ela não existir (Comando SQL Puro)
 $db->exec("CREATE TABLE IF NOT EXISTS resultados (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     titulo TEXT,
@@ -19,8 +17,12 @@ $db->exec("CREATE TABLE IF NOT EXISTS resultados (
 
 echo "--- Banco de Dados Conectado ---\n";
 
-// --- 2. CONFIGURAÇÃO DO CHROME ---
-$chromePath = '/home/antonio_costan/chrome-linux64/chrome';
+// --- 2. CONFIGURAÇÃO DO CHROME (CORRIGIDO) ---
+
+// MUDANÇA AQUI: Usamos __DIR__ para pegar o caminho atual + a pasta do chrome
+// O caminho final será: /home/antonio_costan/bionexo/projeto-robo/chrome-linux64/chrome
+$chromePath = __DIR__ . '/chrome-linux64/chrome';
+
 $options = new ChromeOptions();
 $options->setBinary($chromePath);
 $options->addArguments(['--headless', '--no-sandbox', '--disable-dev-shm-usage', '--window-size=1920,1080']);
@@ -29,13 +31,13 @@ $capabilities = DesiredCapabilities::chrome();
 $capabilities->setCapability(ChromeOptions::CAPABILITY, $options);
 
 try {
+    // ATENÇÃO: O Chromedriver precisa estar rodando na porta 9515 em outro terminal
+    // Ou o código deve iniciá-lo (mas mantive sua lógica original de conectar no localhost)
     $driver = RemoteWebDriver::create('http://localhost:9515', $capabilities);
 
-    // MUDANÇA: Vamos usar a Wikipedia do Laravel, que é mais fácil de ler que o Google
     echo "1. Acessando Wikipedia...\n";
     $driver->get('https://pt.wikipedia.org/wiki/Laravel');
 
-    // Pega o título principal (h1) e os subtítulos (h2)
     echo "2. Lendo dados da página...\n";
     $elementos = $driver->findElements(WebDriverBy::cssSelector('#content h1, #content h2'));
 
@@ -47,7 +49,6 @@ try {
         $texto = $item->getText();
         
         if (!empty($texto) && $texto != 'Conteúdo' && $texto != 'Menu de navegação') {
-            // Executa o INSERT no banco (SQL)
             $stmt->bindValue(':titulo', $texto);
             $stmt->execute();
             echo " [SQL] Salvo: $texto\n";
